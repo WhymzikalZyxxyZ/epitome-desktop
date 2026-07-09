@@ -1,7 +1,7 @@
 import Database      from 'better-sqlite3';
 import { drizzle }   from 'drizzle-orm/better-sqlite3';
-import { readFileSync } from 'node:fs';
-import { join }      from 'node:path';
+import { readFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import * as schema   from './schema';
 
 type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
@@ -20,6 +20,7 @@ const MIGRATIONS = [
 ];
 
 export function initDb(dbPath: string, migrationsDir: string): void {
+    mkdirSync(dirname(dbPath), { recursive: true });
     const sqlite = new Database(dbPath);
     sqlite.pragma('journal_mode = WAL');
     sqlite.pragma('foreign_keys = ON');
