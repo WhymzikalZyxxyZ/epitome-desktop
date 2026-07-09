@@ -1,7 +1,10 @@
-// Minimal preload — the app uses standard fetch/cookie auth, no IPC needed.
-// Extend this file if you need to expose native Electron capabilities to the renderer.
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
+
+type WindowMode = 'windowed' | 'fullscreen' | 'borderless';
 
 contextBridge.exposeInMainWorld('electron', {
     platform: process.platform,
+    windowMode: {
+        set: (mode: WindowMode) => ipcRenderer.invoke('window:setMode', mode),
+    },
 });

@@ -1,6 +1,6 @@
-import { app, BrowserWindow, shell } from 'electron';
-import { autoUpdater }               from 'electron-updater';
-import path                          from 'node:path';
+import { app, BrowserWindow, shell, ipcMain, Menu } from 'electron';
+import { autoUpdater }                               from 'electron-updater';
+import path                                          from 'node:path';
 
 const PORT       = 3847;
 const DEV        = process.env.NODE_ENV === 'development';
@@ -15,13 +15,8 @@ let mainWindow: BrowserWindow | null = null;
 
 async function startServer() {
     const dataDir       = app.isPackaged ? app.getPath('userData') : path.join(ROOT, '.epitome-data');
-    const migrationsDir = app.isPackaged
-        ? path.join(ROOT, 'server', 'src', 'db', 'migrations')
-        : path.join(ROOT, 'server', 'src', 'db', 'migrations');
-
-    const serverPath = app.isPackaged
-        ? path.join(ROOT, 'dist', 'server', 'index.js')
-        : path.join(ROOT, 'dist', 'server', 'index.js');
+    const migrationsDir = path.join(ROOT, 'server', 'src', 'db', 'migrations');
+    const serverPath    = path.join(ROOT, 'dist', 'server', 'index.js');
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { startServer: start } = require(serverPath) as {
@@ -32,21 +27,44 @@ async function startServer() {
 }
 
 async function createWindow() {
+    // Remove the native menu bar (File / Edit / View / Help)
+    Menu.setApplicationMenu(null);
+
     mainWindow = new BrowserWindow({
         width:  1280,
         height: 820,
         minWidth:  900,
         minHeight: 600,
-        titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+        // Hide the native title bar; keep OS window controls via titleBarOverlay on Windows
+        titleBarStyle: 'hidden',
+        titleBarOverlay: process.platform === 'win32' ? {
+            color:       '#1f1028',
+            symbolColor: '#e8a0b4',
+            height:      40,
+        } : undefined,
         webPreferences: {
             preload:          path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration:  false,
         },
-        show: false,
+        show:           false,
+        autoHideMenuBar: true,
     });
 
     mainWindow.once('ready-to-show', () => mainWindow?.show());
+
+    ipcMain.handle('window:setMode', (_, mode: 'windowed' | 'fullscreen' | 'borderless') => {
+        if (!mainWindow) return;
+        if (mode === 'fullscreen') {
+            mainWindow.setFullScreen(true);
+        } else if (mode === 'borderless') {
+            mainWindow.setFullScreen(false);
+            mainWindow.maximize();
+        } else {
+            mainWindow.setFullScreen(false);
+            mainWindow.unmaximize();
+        }
+    });
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
         if (url.startsWith('http')) shell.openExternal(url);

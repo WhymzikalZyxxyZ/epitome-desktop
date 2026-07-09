@@ -15,24 +15,44 @@ export function Layout() {
 
     return (
         <div className="min-h-screen flex flex-col bg-ep-bg">
-            <header className="bg-ep-surface border-b border-ep-border sticky top-0 z-40">
-                <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <Link to="/" className="flex items-center">
+            <header
+                className="bg-ep-surface/95 backdrop-blur-sm border-b border-ep-border sticky top-0 z-40"
+                style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+            >
+                <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+                    <Link
+                        to="/"
+                        className="flex items-center shrink-0"
+                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                    >
                         <AppLogo size="sm" />
                     </Link>
 
-                    <nav className="flex items-center gap-1">
-                        <NavLink to="/"         label="Dashboard" icon={<LayoutDashboard size={16} />} active={pathname === '/'} />
-                        <NavLink to="/projects" label="Projects"  icon={<BookOpen size={16} />}        active={pathname.startsWith('/projects')} />
-                        <NavLink to="/series"   label="Series"    icon={<Library size={16} />}         active={pathname.startsWith('/series')} />
-                        <NavLink to="/events"   label="Events"    icon={<CalendarDays size={16} />}    active={pathname.startsWith('/events')} />
-                        <NavLink to="/settings" label="Atelier"   icon={<Settings size={16} />}         active={pathname.startsWith('/settings')} />
+                    <nav
+                        className="flex items-center gap-0.5"
+                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                    >
+                        <NavLink to="/"         label="Dashboard" icon={<LayoutDashboard size={15} />} active={pathname === '/'} />
+                        <NavLink to="/projects" label="Projects"  icon={<BookOpen size={15} />}        active={pathname.startsWith('/projects')} />
+                        <NavLink to="/series"   label="Series"    icon={<Library size={15} />}         active={pathname.startsWith('/series')} />
+                        <NavLink to="/events"   label="Events"    icon={<CalendarDays size={15} />}    active={pathname.startsWith('/events')} />
+                        <NavLink to="/settings" label="Atelier"   icon={<Settings size={15} />}        active={pathname.startsWith('/settings')} />
                     </nav>
 
-                    <div className="flex items-center gap-3">
-                        <span className="text-ep-text-dim text-xs hidden sm:block">{user?.username}</span>
-                        <button onClick={handleLogout} className="btn-ghost py-1.5 px-3 text-xs" title="Sign out">
-                            <LogOut size={13} /> <span className="hidden sm:inline">Sign Out</span>
+                    <div
+                        className="flex items-center gap-3"
+                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                    >
+                        <span className="text-ep-text-dim text-xs hidden sm:block tracking-wide opacity-70">
+                            {user?.username}
+                        </span>
+                        <button
+                            onClick={handleLogout}
+                            className="btn-ghost py-1.5 px-3 text-xs"
+                            title="Sign out"
+                        >
+                            <LogOut size={13} />
+                            <span className="hidden sm:inline">Sign Out</span>
                         </button>
                     </div>
                 </div>
@@ -49,10 +69,10 @@ function NavLink({ to, label, icon, active }: { to: string; label: string; icon:
     return (
         <Link
             to={to}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium tracking-wide transition-all duration-150 ${
                 active
                     ? 'bg-ep-surface-2 text-ep-rose'
-                    : 'text-ep-muted hover:text-ep-text hover:bg-ep-surface-2'
+                    : 'text-ep-muted hover:text-ep-text hover:bg-ep-surface-2/60'
             }`}
         >
             {icon}

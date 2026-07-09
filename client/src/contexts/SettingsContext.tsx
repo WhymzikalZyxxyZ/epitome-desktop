@@ -2,21 +2,24 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type Theme = 'midnight' | 'ivory' | 'sepia' | 'noir';
+export type Theme      = 'midnight' | 'ivory' | 'sepia' | 'noir';
 export type FontChoice = 'inter' | 'playfair' | 'lora' | 'system';
-export type ZoomLevel = 75 | 85 | 100 | 115 | 125 | 150;
+export type ZoomLevel  = 75 | 85 | 100 | 115 | 125 | 150;
+export type WindowMode = 'windowed' | 'fullscreen' | 'borderless';
 
 export interface Settings {
-    theme:  Theme;
-    font:   FontChoice;
-    zoom:   ZoomLevel;
+    theme:      Theme;
+    font:       FontChoice;
+    zoom:       ZoomLevel;
+    windowMode: WindowMode;
 }
 
 interface SettingsCtx {
-    settings: Settings;
-    setTheme: (t: Theme)       => void;
-    setFont:  (f: FontChoice)  => void;
-    setZoom:  (z: ZoomLevel)   => void;
+    settings:      Settings;
+    setTheme:      (t: Theme)       => void;
+    setFont:       (f: FontChoice)  => void;
+    setZoom:       (z: ZoomLevel)   => void;
+    setWindowMode: (m: WindowMode)  => void;
 }
 
 // ── Font stacks ───────────────────────────────────────────────────────────────
@@ -41,19 +44,16 @@ function loadSettings(): Settings {
 }
 
 function defaults(): Settings {
-    return { theme: 'midnight', font: 'inter', zoom: 100 };
+    return { theme: 'midnight', font: 'inter', zoom: 100, windowMode: 'windowed' };
 }
 
 // ── Apply to DOM ──────────────────────────────────────────────────────────────
 
 function applySettings(s: Settings) {
     const root = document.documentElement;
-    // Theme — data-theme attribute drives CSS variable overrides in index.css
     if (s.theme === 'midnight') root.removeAttribute('data-theme');
     else                        root.setAttribute('data-theme', s.theme);
-    // Font — set on body so the whole UI inherits
     document.body.style.fontFamily = FONT_STACKS[s.font];
-    // Zoom — change :root font-size so all rem-based sizes scale
     root.style.fontSize = s.zoom === 100 ? '' : `${s.zoom}%`;
 }
 
@@ -64,7 +64,6 @@ const Ctx = createContext<SettingsCtx | null>(null);
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const [settings, setSettings] = useState<Settings>(loadSettings);
 
-    // Apply on mount and whenever settings change
     useEffect(() => {
         applySettings(settings);
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch { /* ignore */ }
@@ -79,8 +78,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const setZoom = useCallback((zoom: ZoomLevel) =>
         setSettings(s => ({ ...s, zoom })), []);
 
+    const setWindowMode = useCallback((windowMode: WindowMode) => {
+        setSettings(s => ({ ...s, windowMode }));
+        const electron = (window as unknown as { electron?: { windowMode?: { set: (m: WindowMode) => void } } }).electron;
+        electron?.windowMode?.set(windowMode);
+    }, []);
+
     return (
-        <Ctx.Provider value={{ settings, setTheme, setFont, setZoom }}>
+        <Ctx.Provider value={{ settings, setTheme, setFont, setZoom, setWindowMode }}>
             {children}
         </Ctx.Provider>
     );
