@@ -1,0 +1,119 @@
+import { Hono }       from 'hono';
+import { z }           from 'zod';
+import { zValidator }  from '@hono/zod-validator';
+import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
+import { eq }          from 'drizzle-orm';
+import { getDb }       from '../db/client';
+import { users, sessions } from '../db/schema';
+import { authMiddleware }  from '../middleware/auth';
+import type { Variables }  from '../types';
+
+const app = new Hono<{ Variables: Variables }>();
+
+const SESSION_TTL = 60 * 60 * 24 * 7;
+
+// ── PBKDF2 helpers — same Web Crypto API as Cloudflare Workers ────────────────
+
+const hex   = (b: Uint8Array) => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+const unhex = (s: string)     => new Uint8Array((s.match(/../g) ?? []).map(h => parseInt(h, 16)));
+
+async function hashPassword(password: string): Promise<string> {
+    const salt       = crypto.getRandomValues(new Uint8Array(16));
+    const iterations = 600_000;
+    const key        = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+    const bits       = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, 256);
+    return `${iterations}:${hex(salt)}:${hex(new Uint8Array(bits))}`;
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+    const parts = stored.split(':');
+    let iterations: number;
+    let saltHex:    string;
+    let storedHex:  string;
+    if (parts.length === 3) {
+        iterations = parseInt(parts[0]!, 10);
+        saltHex    = parts[1]!;
+        storedHex  = parts[2]!;
+    } else {
+        iterations = 100_000;
+        saltHex    = parts[0] ?? '';
+        storedHex  = parts[1] ?? '';
+    }
+    const salt      = unhex(saltHex);
+    const key       = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+    const bits      = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, 256);
+    const newBytes  = new Uint8Array(bits);
+    const prevBytes = unhex(storedHex);
+    if (newBytes.length !== prevBytes.length) return false;
+    let diff = 0;
+    for (let i = 0; i < newBytes.length; i++) diff |= (newBytes[i] ?? 0) ^ (prevBytes[i] ?? 0);
+    return diff === 0;
+}
+
+// Localhost is always HTTP so secure:false; sameSite Lax is fine for desktop
+function cookieOpts() {
+    return { httpOnly: true, secure: false, sameSite: 'Lax' as const, path: '/', maxAge: SESSION_TTL };
+}
+
+const credSchema = z.object({
+    username: z.string().min(2).max(50).regex(/^[a-zA-Z0-9_.-]+$/, 'Alphanumeric, . _ - only'),
+    password: z.string().min(8).max(128),
+});
+
+app.post('/signup', zValidator('json', credSchema), async (c) => {
+    const db   = getDb();
+    const body = c.req.valid('json');
+
+    const existing = await db.select().from(users).where(eq(users.username, body.username)).get();
+    if (existing) return c.json({ error: 'Username already taken' }, 409);
+
+    const passwordHash  = await hashPassword(body.password);
+    const userResult    = await db.insert(users).values({ username: body.username, passwordHash }).returning();
+    const user          = userResult[0];
+    if (!user) return c.json({ error: 'Failed to create user' }, 500);
+
+    const expiresAt     = new Date(Date.now() + SESSION_TTL * 1000).toISOString();
+    const sessionResult = await db.insert(sessions).values({ userId: user.userId, expiresAt }).returning();
+    const session       = sessionResult[0];
+    if (!session) return c.json({ error: 'Failed to create session' }, 500);
+
+    setCookie(c, 'ep_session', session.sessionId, cookieOpts());
+    return c.json({ userId: user.userId, username: user.username }, 201);
+});
+
+app.post('/login', zValidator('json', credSchema), async (c) => {
+    const db   = getDb();
+    const body = c.req.valid('json');
+
+    const user = await db.select().from(users).where(eq(users.username, body.username)).get();
+    if (!user || !user.isActive) return c.json({ error: 'Invalid credentials' }, 401);
+
+    const ok = await verifyPassword(body.password, user.passwordHash);
+    if (!ok) return c.json({ error: 'Invalid credentials' }, 401);
+
+    const expiresAt     = new Date(Date.now() + SESSION_TTL * 1000).toISOString();
+    const sessionResult = await db.insert(sessions).values({ userId: user.userId, expiresAt }).returning();
+    const session       = sessionResult[0];
+    if (!session) return c.json({ error: 'Failed to create session' }, 500);
+
+    setCookie(c, 'ep_session', session.sessionId, cookieOpts());
+    return c.json({ userId: user.userId, username: user.username });
+});
+
+app.post('/logout', authMiddleware, async (c) => {
+    const db        = getDb();
+    const sessionId = getCookie(c, 'ep_session')!;
+    await db.delete(sessions).where(eq(sessions.sessionId, sessionId));
+    deleteCookie(c, 'ep_session', { path: '/' });
+    return c.json({ ok: true });
+});
+
+app.get('/me', authMiddleware, async (c) => {
+    const db   = getDb();
+    const user = await db.select({ userId: users.userId, username: users.username, createdAt: users.createdAt })
+        .from(users).where(eq(users.userId, c.get('userId'))).get();
+    if (!user) return c.json({ error: 'Not found' }, 404);
+    return c.json(user);
+});
+
+export default app;

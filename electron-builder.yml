@@ -1,0 +1,46 @@
+appId: xyz.zyxwonderland.epitome
+productName: Epitome
+copyright: Copyright © 2025 Whymzikal Zyxxyz
+
+directories:
+  output: release
+
+files:
+  - dist/**/*
+  - client/dist/**/*
+  - server/src/db/migrations/**/*
+  - node_modules/**/*
+  - package.json
+
+asarUnpack:
+  - node_modules/better-sqlite3/**/*
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: assets/icon.ico
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  icon: assets/icon.icns
+  category: public.app-category.productivity
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  icon: assets/icon.png
+  category: Office
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+publish:
+  provider: github
+  releaseType: release
